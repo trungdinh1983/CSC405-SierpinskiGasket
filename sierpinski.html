@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sierpinski Gasket</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glCanvas" width="640" height="480"></canvas>
+    <script>
+        // Vertex shader program
+        const vsSource = `
+            attribute vec4 aVertexPosition;
+            
+            void main() {
+                gl_Position = aVertexPosition;
+                gl_PointSize = 1.0;
+            }
+        `;
+
+        // Fragment shader program
+        const fsSource = `
+            precision mediump float;
+            
+            void main() {
+                gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+            }
+        `;
+
+        function initShaderProgram(gl, vsSource, fsSource) {
+            const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+            const shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+                return null;
+            }
+
+            return shaderProgram;
+        }
+
+        function loadShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+
+            return shader;
+        }
+
+        function divideTriangle(a, b, c, count, points) {
+            if (count === 0) {
+                points.push(...a, ...b, ...c);
+            } else {
+                const ab = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+                const bc = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2];
+                const ca = [(c[0] + a[0]) / 2, (c[1] + a[1]) / 2];
+
+                count--;
+                divideTriangle(a, ab, ca, count, points);
+                divideTriangle(b, bc, ab, count, points);
+                divideTriangle(c, ca, bc, count, points);
+            }
+        }
+
+        function main() {
+            const canvas = document.querySelector("#glCanvas");
+            const gl = canvas.getContext("webgl");
+
+            if (gl === null) {
+                alert("Unable to initialize WebGL. Your browser or machine may not support it.");
+                return;
+            }
+
+            const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+            const programInfo = {
+                program: shaderProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+                },
+            };
+
+            // Initial triangle vertices
+            const vertices = [];
+            const initialTriangle = [
+                [-1, -1],   // Bottom left
+                [1, -1],    // Bottom right
+                [0, 1]      // Top
+            ];
+
+            // Generate Sierpinski points (5 subdivisions)
+            divideTriangle(...initialTriangle, 5, vertices);
+
+            const vertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+            // Clear canvas
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Use shader program
+            gl.useProgram(programInfo.program);
+
+            // Set up vertex attribute
+            gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+            gl.vertexAttribPointer(
+                programInfo.attribLocations.vertexPosition,
+                2,          // 2 components per vertex
+                gl.FLOAT,   // data type
+                false,      // don't normalize
+                0,          // stride
+                0           // offset
+            );
+
+            // Draw the triangles
+            gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
+        }
+
+        window.onload = main;
+    </script>
+</body>
+</html>
